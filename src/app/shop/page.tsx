@@ -25,6 +25,18 @@ function isProductSort(value: string): value is ProductSort {
   return SORT_OPTIONS.some((option) => option.value === value);
 }
 
+function parsePage(value: string | null): number {
+  if (!value || !/^\d+$/.test(value)) return 1;
+  const page = Number(value);
+  return Number.isSafeInteger(page) && page > 0 ? page : 1;
+}
+
+function parseMaximumPrice(value: string | null): number | null {
+  if (!value || !/^\d+(?:\.\d+)?$/.test(value)) return null;
+  const price = Number(value);
+  return Number.isFinite(price) && price >= 0 ? price : null;
+}
+
 const CURRENCY_OPTIONS: { value: DisplayCurrency; label: string; symbol: string }[] = [
   { value: "USD", label: "USD", symbol: "$" },
   { value: "ETB", label: "ETB", symbol: "ETB" },
@@ -46,25 +58,28 @@ const ShopPage = () => {
   const pathname = usePathname();
   const router = useRouter();
   const activeCategory = searchParams.get("category") || "all";
+  const searchParamValue = searchParams.get("q") ?? "";
+  const requestedSort = searchParams.get("sort") ?? "";
+  const sortBy = isProductSort(requestedSort) ? requestedSort : "newest";
+  const currentPage = parsePage(searchParams.get("page"));
+  const requestedMaxPrice = parseMaximumPrice(searchParams.get("maxPrice"));
 
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoriesError, setCategoriesError] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(searchParamValue);
   const [priceCeiling, setPriceCeiling] = useState(10000);
-  const [maxPriceFilter, setMaxPriceFilter] = useState<number | null>(null);
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchParamValue);
   const [totalCount, setTotalCount] = useState(0);
-  const [sortBy, setSortBy] = useState<ProductSort>("newest");
-  const [currentPage, setCurrentPage] = useState(1);
   const [loadedRequestKey, setLoadedRequestKey] = useState<string | null>(null);
   const [failedRequestKey, setFailedRequestKey] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const itemsPerPage = ITEMS_PER_PAGE;
-  const effectiveMaxPrice =
-    maxPriceFilter !== null && maxPriceFilter < priceCeiling
-      ? maxPriceFilter
-      : undefined;
+  const maxPriceFilter =
+    requestedMaxPrice !== null && requestedMaxPrice < priceCeiling
+      ? requestedMaxPrice
+      : null;
+  const effectiveMaxPrice = maxPriceFilter ?? undefined;
   const requestKey = JSON.stringify([
     activeCategory,
     debouncedSearchQuery,
@@ -75,13 +90,40 @@ const ShopPage = () => {
   const loading = loadedRequestKey !== requestKey;
   const loadError = failedRequestKey === requestKey;
 
+  const updateQuery = useCallback((updates: Record<string, string | null>, resetPage = false) => {
+    const params = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(updates)) {
+      if (value === null) params.delete(key);
+      else params.set(key, value);
+    }
+    if (resetPage) params.delete("page");
+    const query = params.toString();
+    if (query !== searchParams.toString()) {
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    }
+  }, [pathname, router, searchParams]);
+
   useEffect(() => {
-    const timer = window.setTimeout(
-      () => setDebouncedSearchQuery(searchQuery.trim()),
-      250,
-    );
+    setSearchQuery(searchParamValue);
+    setDebouncedSearchQuery(searchParamValue);
+  }, [searchParamValue]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const query = searchQuery.trim();
+      const params = new URLSearchParams(window.location.search);
+      if ((params.get("q") ?? "") === query) {
+        setDebouncedSearchQuery(query);
+        return;
+      }
+      if (query) params.set("q", query);
+      else params.delete("q");
+      params.delete("page");
+      const nextQuery = params.toString();
+      router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+    }, 250);
     return () => window.clearTimeout(timer);
-  }, [searchQuery]);
+  }, [pathname, router, searchQuery]);
 
   useEffect(() => {
     getCategories()
@@ -116,9 +158,6 @@ const ShopPage = () => {
         setTotalCount(result.totalCount);
         const max = Math.max(1000, Math.ceil(result.maxPrice / 100) * 100);
         setPriceCeiling(max);
-        setMaxPriceFilter((current) =>
-          current !== null && current < max ? current : null,
-        );
         setFailedRequestKey(null);
       })
       .catch((error: unknown) => {
@@ -141,25 +180,25 @@ const ShopPage = () => {
     requestKey,
   ]);
 
+  const goToPage = useCallback((page: number) => {
+    updateQuery({ page: page === 1 ? null : String(page) });
+  }, [updateQuery]);
+
   const handleCategorySelect = useCallback((slug: string) => {
-    const params = new URLSearchParams(searchParams.toString());
-    if (slug === "all") params.delete("category");
-    else params.set("category", slug);
-    const query = params.toString();
-    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
-    setCurrentPage(1);
-    setMaxPriceFilter(null);
+    updateQuery({
+      category: slug === "all" ? null : slug,
+      maxPrice: null,
+    }, true);
     setSidebarOpen(false);
-  }, [
-    pathname,
-    router,
-    searchParams,
-    setCurrentPage,
-    setMaxPriceFilter,
-    setSidebarOpen,
-  ]);
+  }, [updateQuery]);
 
   const totalPages = Math.ceil(totalCount / itemsPerPage);
+  useEffect(() => {
+    if (loading || loadError) return;
+    const lastPage = Math.max(totalPages, 1);
+    if (currentPage > lastPage) goToPage(lastPage);
+  }, [currentPage, goToPage, loadError, loading, totalPages]);
+
   const visiblePageCount = Math.min(totalPages, 5);
   const firstVisiblePage = Math.min(
     Math.max(currentPage - 2, 1),
@@ -175,11 +214,21 @@ const ShopPage = () => {
     sortBy !== "newest";
 
   function clearAll() {
-    handleCategorySelect("all");
     setSearchQuery("");
-    setMaxPriceFilter(null);
-    setSortBy("newest");
-    setCurrentPage(1);
+    setDebouncedSearchQuery("");
+    updateQuery({
+      category: null,
+      q: null,
+      maxPrice: null,
+      sort: null,
+      page: null,
+    });
+  }
+
+  function clearSearch() {
+    setSearchQuery("");
+    setDebouncedSearchQuery("");
+    updateQuery({ q: null }, true);
   }
 
   // Sidebar contents — shared between desktop sticky and mobile drawer
@@ -196,14 +245,14 @@ const ShopPage = () => {
             aria-label="Search products"
             placeholder="Search product names…"
             value={searchQuery}
-            onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+            onChange={(e) => setSearchQuery(e.target.value)}
             className="h-11 w-full rounded-xl border border-input bg-background pl-10 pr-9 text-sm font-medium outline-none transition placeholder:text-muted-foreground/50 focus:border-primary focus:ring-2 focus:ring-primary/15"
           />
           {searchQuery && (
             <button
               type="button"
               aria-label="Clear search"
-              onClick={() => { setSearchQuery(""); setCurrentPage(1); }}
+              onClick={clearSearch}
               className="absolute right-3 top-1/2 -translate-y-1/2 flex size-6 items-center justify-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground"
             >
               <X size={13} />
@@ -220,8 +269,7 @@ const ShopPage = () => {
             value={sortBy}
             onChange={(e) => {
               if (!isProductSort(e.target.value)) return;
-              setSortBy(e.target.value);
-              setCurrentPage(1);
+              updateQuery({ sort: e.target.value === "newest" ? null : e.target.value }, true);
             }}
             className="h-11 w-full appearance-none rounded-xl border border-input bg-background px-3.5 pr-9 text-sm font-semibold outline-none transition hover:border-primary/40 focus:border-primary focus:ring-2 focus:ring-primary/15 [color-scheme:light] dark:[color-scheme:dark]"
           >
@@ -321,7 +369,10 @@ const ShopPage = () => {
             max={priceCeiling}
             step={50}
             value={maxPriceFilter ?? priceCeiling}
-            onChange={(e) => { setMaxPriceFilter(Number(e.target.value)); setCurrentPage(1); }}
+            onChange={(e) => {
+              const value = Number(e.target.value);
+              updateQuery({ maxPrice: value < priceCeiling ? String(value) : null }, true);
+            }}
             className="w-full cursor-pointer accent-primary"
             aria-label="Maximum price"
           />
@@ -372,7 +423,7 @@ const ShopPage = () => {
               aria-label="Search product names"
               placeholder="Search product names…"
               value={searchQuery}
-              onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="h-11 w-full rounded-xl border border-input bg-card pl-10 pr-4 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
             />
           </div>
@@ -449,13 +500,13 @@ const ShopPage = () => {
                 {searchQuery && (
                   <span className="flex items-center gap-1.5 rounded-full border border-border bg-secondary px-3 py-1 text-xs font-semibold text-muted-foreground">
                     &quot;{searchQuery}&quot;
-                    <button type="button" onClick={() => setSearchQuery("")} className="hover:text-destructive"><X size={11} /></button>
+                    <button type="button" onClick={clearSearch} className="hover:text-destructive"><X size={11} /></button>
                   </span>
                 )}
                 {effectiveMaxPrice !== undefined && (
                   <span className="flex items-center gap-1.5 rounded-full border border-border bg-secondary px-3 py-1 text-xs font-semibold text-muted-foreground">
                     ≤ {formatDisplayCurrency(toDisplay(effectiveMaxPrice, currency), currency)}
-                    <button type="button" onClick={() => { setMaxPriceFilter(null); setCurrentPage(1); }} className="hover:text-destructive"><X size={11} /></button>
+                    <button type="button" onClick={() => updateQuery({ maxPrice: null }, true)} className="hover:text-destructive"><X size={11} /></button>
                   </span>
                 )}
               </div>
@@ -485,14 +536,14 @@ const ShopPage = () => {
                     <div className="flex items-center gap-1.5 sm:gap-2">
                       <button
                         disabled={currentPage === 1}
-                        onClick={() => { setCurrentPage(1); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                        onClick={() => { goToPage(1); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                         className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition hover:border-primary/40 hover:text-primary disabled:opacity-30 sm:flex"
                       >
                         <ChevronsLeft size={18} />
                       </button>
                       <button
                         disabled={currentPage === 1}
-                        onClick={() => { setCurrentPage((p) => p - 1); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                        onClick={() => { goToPage(currentPage - 1); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition hover:border-primary/40 hover:text-primary disabled:opacity-30"
                       >
                         <ArrowLeft size={16} />
@@ -502,7 +553,7 @@ const ShopPage = () => {
                         {visiblePages.map((page) => (
                           <button
                             key={page}
-                            onClick={() => { setCurrentPage(page); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                            onClick={() => { goToPage(page); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                             className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold transition
                               ${currentPage === page
                                 ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
@@ -515,14 +566,14 @@ const ShopPage = () => {
 
                       <button
                         disabled={currentPage === totalPages}
-                        onClick={() => { setCurrentPage((p) => p + 1); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                        onClick={() => { goToPage(currentPage + 1); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition hover:border-primary/40 hover:text-primary disabled:opacity-30"
                       >
                         <ArrowRight size={16} />
                       </button>
                       <button
                         disabled={currentPage === totalPages}
-                        onClick={() => { setCurrentPage(totalPages); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                        onClick={() => { goToPage(totalPages); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                         className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition hover:border-primary/40 hover:text-primary disabled:opacity-30 sm:flex"
                       >
                         <ChevronsRight size={18} />
