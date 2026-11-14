@@ -1383,7 +1383,7 @@ SET public = EXCLUDED.public,
 --    - Order confirmations
 --    - Newsletter verification
 --    - Password resets
---    - Contact form submissions
+--    Contact form delivery uses the EmailJS credentials documented in README.md.
 
 -- 4. Admin product changes and image uploads are allowed only through
 --    server actions that verify the Supabase Auth app_metadata role claim.
@@ -1438,6 +1438,70 @@ END $$;
 -- =============================================================================
 
 -- Make newly created or updated RPCs available to PostgREST immediately.
+CREATE TABLE IF NOT EXISTS public.public_submission_rate_limits (
+    bucket_key TEXT PRIMARY KEY,
+    window_started_at TIMESTAMPTZ NOT NULL,
+    request_count INTEGER NOT NULL CHECK (request_count > 0)
+);
+
+CREATE INDEX IF NOT EXISTS idx_public_submission_rate_limits_window
+    ON public.public_submission_rate_limits(window_started_at);
+
+ALTER TABLE public.public_submission_rate_limits ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.public_submission_rate_limits FROM PUBLIC, anon, authenticated;
+GRANT ALL ON TABLE public.public_submission_rate_limits TO service_role;
+
+CREATE OR REPLACE FUNCTION public.check_public_submission_rate_limit(
+    p_bucket_key TEXT,
+    p_max_requests INTEGER,
+    p_window_seconds INTEGER
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+    v_now TIMESTAMPTZ := clock_timestamp();
+    v_request_count INTEGER;
+BEGIN
+    IF p_bucket_key IS NULL OR length(p_bucket_key) = 0 OR length(p_bucket_key) > 256
+       OR p_max_requests IS NULL OR p_max_requests < 1 OR p_max_requests > 1000
+       OR p_window_seconds IS NULL OR p_window_seconds < 1 OR p_window_seconds > 86400 THEN
+        RAISE EXCEPTION 'Invalid public submission rate limit parameters.';
+    END IF;
+
+    DELETE FROM public.public_submission_rate_limits
+    WHERE window_started_at < v_now - INTERVAL '1 day';
+
+    INSERT INTO public.public_submission_rate_limits AS limits (
+        bucket_key,
+        window_started_at,
+        request_count
+    )
+    VALUES (p_bucket_key, v_now, 1)
+    ON CONFLICT (bucket_key) DO UPDATE
+    SET window_started_at = CASE
+            WHEN limits.window_started_at <= v_now - make_interval(secs => p_window_seconds)
+                THEN v_now
+            ELSE limits.window_started_at
+        END,
+        request_count = CASE
+            WHEN limits.window_started_at <= v_now - make_interval(secs => p_window_seconds)
+                THEN 1
+            ELSE limits.request_count + 1
+        END
+    RETURNING request_count INTO v_request_count;
+
+    RETURN v_request_count <= p_max_requests;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.check_public_submission_rate_limit(TEXT, INTEGER, INTEGER)
+    FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.check_public_submission_rate_limit(TEXT, INTEGER, INTEGER)
+    TO service_role;
+
 NOTIFY pgrst, 'reload schema';
 
 COMMIT;

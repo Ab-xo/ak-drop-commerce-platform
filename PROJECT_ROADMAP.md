@@ -258,6 +258,11 @@ to be implemented; this phase is not complete.
 
 **Priority:** P2 — customer retention and conversion.
 
+**Implementation status:** The shop now stores category, search, maximum price,
+sort, and page selections in URL parameters so filtered catalog views can be
+shared and restored. Coupon validation, wishlists, verified reviews, and
+related-product recommendations remain unimplemented.
+
 **Scope**
 
 - Make category browsing data-driven and consistent between home, categories,
