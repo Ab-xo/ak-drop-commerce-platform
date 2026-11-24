@@ -93,7 +93,9 @@ export default function Navbar() {
   }, [userId]);
 
   useEffect(() => {
-    const onScroll = () => setIsScrolled(window.scrollY > 24);
+    // Use scrollY > 10 so even a tiny scroll triggers the solid navbar.
+    // Run immediately on mount so SSR/hydration doesn't cause a flash.
+    const onScroll = () => setIsScrolled(window.scrollY > 10);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
@@ -106,15 +108,12 @@ export default function Navbar() {
   ];
 
   return (
-    <motion.nav
-      initial={false}
-      animate={{
-        backgroundColor: isScrolled ? "hsl(var(--background) / 0.88)" : "hsl(var(--hero-surface) / 0.18)",
-        backdropFilter: isScrolled ? "blur(18px) saturate(1.25)" : "blur(6px)",
-        borderColor: isScrolled ? "hsl(var(--border) / 0.8)" : "hsl(var(--border) / 0)",
-      }}
-      className="fixed top-0 w-full z-50 border-b transition-shadow"
-      style={{ boxShadow: isScrolled ? "0 10px 30px hsl(var(--background) / 0.18)" : "none" }}
+    <nav
+      className={`fixed top-0 w-full z-50 border-b transition-all duration-300 ${
+        isScrolled
+          ? "bg-background/95 backdrop-blur-xl border-border/80 shadow-sm"
+          : "bg-background border-border/60"
+      }`}
     >
       <div className="container mx-auto px-4 md:px-8 py-3 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-3 group" aria-label="AK Drop home">
@@ -122,7 +121,15 @@ export default function Navbar() {
           <span className="text-xl font-black tracking-[.18em] uppercase group-hover:text-primary transition-colors duration-200">DROP</span>
         </Link>
         <div className="hidden md:flex items-center gap-7">
-          {navLinks.map((link) => <Link key={link.name} href={link.href} className="text-sm hover:text-primary nav-link">{link.name}</Link>)}
+          {navLinks.map((link) => (
+            <Link
+              key={link.name}
+              href={link.href}
+              className="text-sm hover:text-primary nav-link transition-colors"
+            >
+              {link.name}
+            </Link>
+          ))}
         </div>
         <div className="flex items-center gap-2">
           <ClientOnly><ThemeToggle /></ClientOnly>
@@ -148,6 +155,6 @@ export default function Navbar() {
       <AnimatePresence>
         {mobileMenuOpen && <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="md:hidden bg-background/95 backdrop-blur-2xl border-b border-border"><div className="flex flex-col p-6 gap-4">{navLinks.map((link) => <Link key={link.name} href={link.href} className="text-lg border-b border-border/50 pb-3" onClick={() => setMobileMenuOpen(false)}>{link.name}</Link>)}</div></motion.div>}
       </AnimatePresence>
-    </motion.nav>
+    </nav>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { motion } from "framer-motion";
 import Hero from "@/components/layout/Hero";
 import ProductCard from "@/components/ui/ProductCard";
 import {
@@ -15,31 +16,6 @@ import { formatDisplayCurrency } from "@/lib/currency";
 import { useDisplayCurrency } from "@/store/currencyStore";
 
 // ── Marquee ticker ────────────────────────────────────────────────────────────
-const TICKER_ITEMS = [
-  "Multi-currency display",
-  "New drops and collections",
-  "Country-aware checkout",
-  "Server-validated orders",
-  "Responsive shopping",
-  "Portfolio commerce demo",
-];
-
-function Ticker() {
-  const items = [...TICKER_ITEMS, ...TICKER_ITEMS];
-  return (
-    <div className="overflow-hidden border-y border-border bg-primary py-3 select-none">
-      <div className="flex animate-marquee gap-12 whitespace-nowrap">
-        {items.map((item, i) => (
-          <span key={i} className="flex items-center gap-3 text-[11px] font-black uppercase tracking-[0.2em] text-primary-foreground">
-            <span className="h-1 w-1 rounded-full bg-primary-foreground/60" />
-            {item}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ── Category card ─────────────────────────────────────────────────────────────
 const CATEGORY_FALLBACKS: Record<string, string> = {
   footwear:    "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=900&q=85",
@@ -113,10 +89,10 @@ function DealCard({ product }: { product: Product }) {
 
 // ── Trust badges ──────────────────────────────────────────────────────────────
 const TRUST = [
-  { icon: Truck,       label: "Flexible destinations", sub: "Country-aware delivery details" },
-  { icon: RefreshCw,   label: "Clear order status",    sub: "Track pending order progress" },
-  { icon: ShieldCheck, label: "Validated checkout",    sub: "Server-checked product totals" },
-  { icon: Headphones,  label: "Support-ready",         sub: "Contact details configurable" },
+  { icon: ShieldCheck, label: "Secure checkout",        sub: "Server-validated every order" },
+  { icon: RefreshCw,   label: "Live order tracking",    sub: "Real-time status updates" },
+  { icon: Truck,       label: "Delivery details",       sub: "Country-aware shipping form" },
+  { icon: Headphones,  label: "Customer support",       sub: "Direct email contact" },
 ];
 
 // ── Main page ─────────────────────────────────────────────────────────────────
@@ -166,26 +142,6 @@ export default function Home() {
           Store products could not be loaded. Check the Supabase URL, public key, and database connection, then refresh.
         </p>
       )}
-
-      {/* ── Ticker ── */}
-      <Ticker />
-
-      {/* ── Trust badges ── */}
-      <section className="border-b border-border bg-background py-8">
-        <div className="mx-auto grid max-w-6xl grid-cols-2 gap-6 px-4 sm:grid-cols-4">
-          {TRUST.map(({ icon: Icon, label, sub }) => (
-            <div key={label} className="flex items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-                <Icon size={20} className="text-primary" />
-              </div>
-              <div>
-                <p className="text-sm font-bold">{label}</p>
-                <p className="text-xs text-muted-foreground">{sub}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
 
       {/* ── Shop by category ── */}
       <section className="bg-background py-16 sm:py-20">
@@ -372,6 +328,41 @@ export default function Home() {
             >
               Explore Everything <ShoppingBag size={18} />
             </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Why AK Drop — animated trust strip ── */}
+      <section className="border-t border-border bg-secondary/30 py-14 sm:py-16">
+        <div className="mx-auto max-w-6xl px-4">
+          <motion.p
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-60px" }}
+            transition={{ duration: 0.5 }}
+            className="mb-10 text-center text-[10px] font-black uppercase tracking-[0.28em] text-muted-foreground"
+          >
+            Why AK Drop
+          </motion.p>
+          <div className="grid grid-cols-2 gap-5 sm:grid-cols-4 sm:gap-6">
+            {TRUST.map(({ icon: Icon, label, sub }, i) => (
+              <motion.div
+                key={label}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-40px" }}
+                transition={{ duration: 0.5, delay: i * 0.1, ease: "easeOut" }}
+                className="group flex flex-col items-center gap-3 rounded-2xl border border-border bg-card p-5 text-center shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md sm:p-6"
+              >
+                <span className="flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary transition-transform duration-300 group-hover:scale-110">
+                  <Icon size={22} />
+                </span>
+                <div>
+                  <p className="text-sm font-bold">{label}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{sub}</p>
+                </div>
+              </motion.div>
+            ))}
           </div>
         </div>
       </section>
