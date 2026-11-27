@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useTransition } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  Lock, Shield, Bell, Globe, Trash2, Smartphone, 
+import {
+  Lock, Shield, Bell, Globe, Trash2, Smartphone,
   Eye, ChevronRight, Zap, Moon, Sun
 } from 'lucide-react';
 import { User as SupabaseUser } from '@supabase/supabase-js';
@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { useTheme } from 'next-themes';
 import { DISPLAY_CURRENCIES } from '@/lib/currency';
 import { useCurrencyStore, useDisplayCurrency } from '@/store/currencyStore';
+import { loadAccountSettings, saveAccountSettings } from '@/lib/settings-actions';
 
 interface SettingsSectionProps {
   user: SupabaseUser;
@@ -22,9 +23,10 @@ export default function SettingsSection({ user, profile }: SettingsSectionProps)
   const { theme, setTheme } = useTheme();
   const currency = useDisplayCurrency();
   const setCurrency = useCurrencyStore((state) => state.setCurrency);
+  const [isPending, startTransition] = useTransition();
   const [settings, setSettings] = useState({
     orderNotifs: true,
-    promoNotifs: true,
+    promoNotifs: false,
     productNotifs: false,
     newsletter: false,
     profileVisible: true,
@@ -32,9 +34,40 @@ export default function SettingsSection({ user, profile }: SettingsSectionProps)
     personalizedRecs: true,
   });
 
+  // Load persisted preferences from DB on mount
+  useEffect(() => {
+    loadAccountSettings().then((result) => {
+      if (result.preferences) {
+        setSettings((prev) => ({
+          ...prev,
+          orderNotifs: result.preferences!.order_updates,
+          promoNotifs: result.preferences!.promotional_emails,
+          newsletter: result.preferences!.email_notifications,
+        }));
+      }
+    });
+  }, [user.id]);
+
   const toggleSetting = (key: keyof typeof settings) => {
-    setSettings(prev => ({ ...prev, [key]: !prev[key] }));
-    toast.success('Setting updated!');
+    const nextSettings = { ...settings, [key]: !settings[key] };
+    setSettings(nextSettings);
+
+    // Map UI keys to DB preference keys
+    const formData = new FormData();
+    formData.set('email_notifications', String(nextSettings.newsletter));
+    formData.set('order_updates', String(nextSettings.orderNotifs));
+    formData.set('promotional_emails', String(nextSettings.promoNotifs));
+
+    startTransition(async () => {
+      const result = await saveAccountSettings(formData);
+      if (result.success) {
+        toast.success('Setting saved!');
+      } else {
+        // Revert on error
+        setSettings(settings);
+        toast.error(result.error ?? 'Failed to save setting');
+      }
+    });
   };
 
   const securityActions = [
@@ -167,7 +200,7 @@ export default function SettingsSection({ user, profile }: SettingsSectionProps)
             { key: 'orderNotifs', label: 'Order Updates', desc: 'Get notified about your order status' },
             { key: 'promoNotifs', label: 'Promotions & Offers', desc: 'Receive exclusive deals' },
             { key: 'productNotifs', label: 'Product Updates', desc: 'New arrivals and back in stock' },
-            { key: 'newsletter', label: 'Newsletter', desc: 'Weekly updates and content' },
+            { key: 'newsletter', label: 'Email Notifications', desc: 'Email updates and content' },
           ].map((item, i) => (
             <motion.div
               key={item.key}
@@ -182,7 +215,8 @@ export default function SettingsSection({ user, profile }: SettingsSectionProps)
               </div>
               <button
                 onClick={() => toggleSetting(item.key as keyof typeof settings)}
-                className={`relative w-12 h-6 rounded-full transition-colors ${
+                disabled={isPending}
+                className={`relative w-12 h-6 rounded-full transition-colors disabled:opacity-60 ${
                   settings[item.key as keyof typeof settings]
                     ? 'bg-primary'
                     : 'bg-muted'
@@ -226,7 +260,7 @@ export default function SettingsSection({ user, profile }: SettingsSectionProps)
             >
               {/* Gradient background */}
               <div className={`absolute inset-0 bg-gradient-to-r ${action.color} opacity-50`} />
-              
+
               <div className="relative flex items-center gap-4 p-5 bg-secondary/30 hover:bg-secondary/50 transition-colors">
                 <div className={`p-3 rounded-xl ${action.iconColor}`}>
                   <Icon size={22} />
@@ -368,7 +402,7 @@ export default function SettingsSection({ user, profile }: SettingsSectionProps)
         className="relative overflow-hidden rounded-2xl"
       >
         <div className="absolute inset-0 bg-gradient-to-r from-red-500/10 via-red-500/5 to-transparent" />
-        
+
         <div className="relative glass-card border-red-500/20">
           <div className="flex items-start gap-4 mb-4">
             <div className="p-3 bg-red-500/10 rounded-xl">

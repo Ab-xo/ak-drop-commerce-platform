@@ -2,7 +2,7 @@
 
 import { useCartStore } from "@/store/cartStore";
 import Link from "next/link";
-import { ShoppingCart, User, Search, Menu, X, Bell } from "lucide-react";
+import { ShoppingCart, User, Search, Menu, X, Bell, Heart } from "lucide-react";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import ThemeToggle from "@/components/ui/ThemeToggle";
@@ -141,6 +141,13 @@ export default function Navbar() {
           >
             <Bell size={19} />
             {unreadNotifications > 0 && <span className="absolute -right-0.5 -top-0.5 flex min-h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-black text-primary-foreground">{unreadNotifications > 9 ? "9+" : unreadNotifications}</span>}
+          </Link>}
+          {user && <Link
+            href="/wishlist"
+            aria-label="Wishlist"
+            className="rounded-full p-2 transition hover:bg-foreground/10"
+          >
+            <Heart size={19} />
           </Link>}
           <button onClick={() => setCartOpen(true)} aria-label="Open shopping bag" className="p-2 hover:bg-foreground/10 rounded-full relative">
             <ShoppingCart size={19} />

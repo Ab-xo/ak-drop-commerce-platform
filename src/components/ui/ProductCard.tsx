@@ -3,17 +3,23 @@
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowUpRight, ShoppingBag, Sparkles } from "lucide-react";
+import { ArrowUpRight, ShoppingBag, Sparkles, Heart } from "lucide-react";
 import type { Product } from "@/types";
 import { useCartStore } from "@/store/cartStore";
 import { formatDisplayCurrency } from "@/lib/currency";
 import { useDisplayCurrency } from "@/store/currencyStore";
 import { getProductImageUrl } from "@/utils/imageUtils";
 import { getAvailableProductStock, getVariantPrice } from "@/lib/product-variants";
+import { useState, useEffect } from "react";
+import { toast } from "sonner";
+import { toggleWishlist, getWishlist } from "@/lib/wishlist-actions";
 
 export default function ProductCard({ product }: { product: Product }) {
   const addItem = useCartStore((state) => state.addItem);
   const currency = useDisplayCurrency();
+  const [wishlisted, setWishlisted] = useState(false);
+  const [wishlistPending, setWishlistPending] = useState(false);
+
   const variants = product.variants ?? [];
   const outOfStock = getAvailableProductStock(product) <= 0;
   const needsVariant = variants.length > 0;
@@ -24,6 +30,41 @@ export default function ProductCard({ product }: { product: Product }) {
   const discount = hasDiscount
     ? Math.round(100 - (displayPrice / (product.compare_price ?? displayPrice)) * 100)
     : 0;
+
+  // Hydrate initial wishlist state
+  useEffect(() => {
+    getWishlist().then((result) => {
+      if (result.items.some((item) => item.product_id === product.id)) {
+        setWishlisted(true);
+      }
+    });
+  }, [product.id]);
+
+  async function handleWishlistClick(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (wishlistPending) return;
+    setWishlistPending(true);
+
+    const result = await toggleWishlist(product.id);
+
+    if (result.error === 'Not authenticated') {
+      toast.error('Sign in to save items');
+      setWishlistPending(false);
+      return;
+    }
+
+    if (result.error) {
+      toast.error('Could not update wishlist');
+      setWishlistPending(false);
+      return;
+    }
+
+    setWishlisted(result.wishlisted);
+    toast.success(result.wishlisted ? 'Added to wishlist' : 'Removed from wishlist');
+    setWishlistPending(false);
+  }
 
   return (
     <motion.article
@@ -49,8 +90,8 @@ export default function ProductCard({ product }: { product: Product }) {
         </Link>
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-black/10 opacity-70 transition-opacity duration-500 group-hover:opacity-100" />
 
-        <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex items-start justify-between gap-2 sm:inset-x-4 sm:top-4">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="absolute inset-x-3 top-3 z-10 flex items-start justify-between gap-2 sm:inset-x-4 sm:top-4">
+          <div className="pointer-events-none flex flex-wrap items-center gap-2">
             {product.is_new_arrival && (
               <span className="inline-flex items-center gap-1.5 rounded-full border border-white/70 bg-white/95 px-3 py-1.5 text-[9px] font-extrabold uppercase tracking-[0.15em] text-zinc-900 shadow-[0_5px_18px_-7px_rgba(0,0,0,0.5)] backdrop-blur-md sm:px-3.5 sm:text-[10px]">
                 <Sparkles size={12} className="text-primary" strokeWidth={2.5} />
@@ -63,11 +104,29 @@ export default function ProductCard({ product }: { product: Product }) {
               </span>
             )}
           </div>
-          {outOfStock && (
-            <span className="rounded-full border border-white/15 bg-black/70 px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-white backdrop-blur-md sm:text-[10px]">
-              Sold out
-            </span>
-          )}
+
+          <div className="flex flex-col items-end gap-2">
+            {/* Wishlist heart button */}
+            <button
+              type="button"
+              onClick={handleWishlistClick}
+              disabled={wishlistPending}
+              aria-label={wishlisted ? "Remove from wishlist" : "Add to wishlist"}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-white/35 bg-white/90 backdrop-blur shadow transition hover:scale-105 disabled:opacity-60"
+            >
+              <Heart
+                size={15}
+                className={wishlisted ? "fill-red-500 text-red-500" : "text-muted-foreground"}
+                strokeWidth={wishlisted ? 0 : 2}
+              />
+            </button>
+
+            {outOfStock && (
+              <span className="rounded-full border border-white/15 bg-black/70 px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-white backdrop-blur-md sm:text-[10px]">
+                Sold out
+              </span>
+            )}
+          </div>
         </div>
 
         <Link
