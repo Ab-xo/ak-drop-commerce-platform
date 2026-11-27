@@ -15,10 +15,10 @@ export default async function WishlistPage() {
   }
 
   const { data: wishlistItems, error } = await supabase
-    .from('wishlist_items')
+    .from('wishlist')
     .select('product_id, products(*)')
     .eq('user_id', user.id)
-    .order('created_at', { ascending: false });
+    .order('added_at', { ascending: false });
 
   if (error) {
     console.error('Wishlist fetch error:', error.message);

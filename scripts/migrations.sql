@@ -59,26 +59,16 @@ DROP POLICY IF EXISTS "Users can view approved reviews" ON public.product_review
 -- Create view approved reviews policy
 CREATE POLICY "Users can view approved reviews" ON public.product_reviews FOR SELECT USING (is_approved = TRUE OR auth.uid() = user_id);
 
--- Create wishlist_items table
-CREATE TABLE IF NOT EXISTS public.wishlist_items (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-      product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-      UNIQUE(user_id, product_id)
-    );
+-- Create wishlist_items table (uses existing 'wishlist' table in this project)
+-- wishlist table already exists: user_id, product_id, UNIQUE(user_id, product_id)
+-- Ensure RLS and grants are correct
+ALTER TABLE public.wishlist ENABLE ROW LEVEL SECURITY;
 
--- Enable RLS on wishlist_items
-ALTER TABLE public.wishlist_items ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage own wishlist" ON public.wishlist;
+CREATE POLICY "Users can manage own wishlist" ON public.wishlist
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
--- Drop old wishlist policy
-DROP POLICY IF EXISTS "Users can manage own wishlist" ON public.wishlist_items;
-
--- Create wishlist management policy
-CREATE POLICY "Users can manage own wishlist" ON public.wishlist_items FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
--- Grant wishlist_items to authenticated
-GRANT ALL ON TABLE public.wishlist_items TO authenticated;
+GRANT ALL ON TABLE public.wishlist TO authenticated;
 
 -- Grant product_reviews to authenticated
 GRANT ALL ON TABLE public.product_reviews TO authenticated;

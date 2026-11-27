@@ -1,7 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, LoaderCircle } from "lucide-react";
+import { useActionState } from "react";
+import { subscribeToNewsletter } from "@/app/newsletter/actions";
+
+type NewsletterActionState = {
+  success: boolean;
+  message: string;
+  error: string;
+};
+
+const initialNewsletterState: NewsletterActionState = {
+  success: false,
+  message: "",
+  error: "",
+};
 
 const shopLinks = [
   { label: "All products",       href: "/shop" },
@@ -59,11 +73,23 @@ function FooterLink({
 
 export default function Footer() {
   const year = new Date().getFullYear();
+  const [newsletterState, newsletterAction, isSubscribing] = useActionState(
+    async (
+      _previous: NewsletterActionState,
+      formData: FormData,
+    ): Promise<NewsletterActionState> => {
+      const result = await subscribeToNewsletter(formData);
+      return "error" in result
+        ? { success: false, message: "", error: result.error ?? "Could not subscribe." }
+        : { success: true, message: result.message ?? "Subscription confirmed.", error: "" };
+    },
+    initialNewsletterState,
+  );
 
   return (
     <footer className="bg-secondary/30 border-t border-border pt-16 pb-8 mt-auto">
       <div className="container mx-auto px-4 md:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[1.25fr_0.75fr_0.75fr_1.25fr] gap-12 mb-16">
 
           {/* Brand */}
           <div>
@@ -108,13 +134,31 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* Contact */}
+          {/* Newsletter */}
           <div>
-            <h4 className="font-bold mb-6 text-sm uppercase tracking-widest">Contact</h4>
+            <h4 className="font-bold mb-6 text-sm uppercase tracking-widest">Drop updates</h4>
             <p className="text-foreground/70 text-sm leading-relaxed mb-5">
-              Questions about fit, delivery, or availability? We&apos;re here to help.
+              Get launch alerts and limited-edition releases in your inbox.
             </p>
-            <FooterLink href="/contact" label="Get in touch" />
+            <form action={newsletterAction} className="space-y-3">
+              <input name="website" tabIndex={-1} autoComplete="off" className="sr-only" aria-label="Leave empty" />
+              <div className="flex rounded-xl border border-input bg-background p-1 focus-within:border-primary">
+                <input
+                  name="email"
+                  type="email"
+                  required
+                  maxLength={254}
+                  placeholder="Email address"
+                  aria-label="Email address"
+                  className="min-w-0 flex-1 bg-transparent px-3 text-sm outline-none"
+                />
+                <button type="submit" disabled={isSubscribing} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground disabled:opacity-60" aria-label="Subscribe">
+                  {isSubscribing ? <LoaderCircle size={16} className="animate-spin" /> : <ArrowUpRight size={17} />}
+                </button>
+              </div>
+              {newsletterState.message && <p role="status" className="text-xs text-primary">{newsletterState.message}</p>}
+              {newsletterState.error && <p role="alert" className="text-xs text-destructive">{newsletterState.error}</p>}
+            </form>
           </div>
 
         </div>

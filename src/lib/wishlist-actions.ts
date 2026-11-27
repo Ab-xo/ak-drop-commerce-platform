@@ -14,7 +14,7 @@ export async function toggleWishlist(
 
   // Check if already wishlisted
   const { data: existing } = await supabase
-    .from('wishlist_items')
+    .from('wishlist')
     .select('id')
     .eq('user_id', user.id)
     .eq('product_id', productId)
@@ -23,7 +23,7 @@ export async function toggleWishlist(
   if (existing) {
     // Remove from wishlist
     const { error } = await supabase
-      .from('wishlist_items')
+      .from('wishlist')
       .delete()
       .eq('user_id', user.id)
       .eq('product_id', productId);
@@ -36,7 +36,7 @@ export async function toggleWishlist(
 
   // Add to wishlist
   const { error } = await supabase
-    .from('wishlist_items')
+    .from('wishlist')
     .insert({ user_id: user.id, product_id: productId });
 
   if (error) {
@@ -58,7 +58,7 @@ export async function getWishlist(): Promise<{
   }
 
   const { data, error } = await supabase
-    .from('wishlist_items')
+    .from('wishlist')
     .select('product_id')
     .eq('user_id', user.id);
 

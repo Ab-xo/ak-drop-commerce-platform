@@ -20,15 +20,24 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AK Drop | Global Fashion & Everyday Style",
-  description:
-    "Explore a global-ready commerce portfolio for footwear, apparel, accessories, and everyday style.",
-  keywords: "fashion, footwear, commerce portfolio, AK Drop, shoes, apparel",
+  title: { default: "AK Drop | Premium Fashion & Everyday Style", template: "%s | AK Drop" },
+  description: "Discover curated footwear, apparel, accessories, and everyday style. Shop the latest drops with secure checkout.",
+  keywords: ["fashion", "footwear", "sneakers", "apparel", "accessories", "AK Drop", "streetwear"],
   authors: [{ name: "AK Drop" }],
   robots: "index, follow",
-  icons: {
-    icon: "/Minimalist%20Purple%20AK%20App%20Icon.png",
-    shortcut: "/Minimalist%20Purple%20AK%20App%20Icon.png",
+  icons: { icon: "/ak-drop-icon.svg", shortcut: "/ak-drop-icon.svg" },
+  openGraph: {
+    type: "website",
+    siteName: "AK Drop",
+    title: "AK Drop | Premium Fashion & Everyday Style",
+    description: "Discover curated footwear, apparel, accessories, and everyday style.",
+    images: [{ url: "/img/backgroundHD2.jpg", width: 1200, height: 630, alt: "AK Drop" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "AK Drop | Premium Fashion & Everyday Style",
+    description: "Discover curated footwear, apparel, accessories, and everyday style.",
+    images: ["/img/backgroundHD2.jpg"],
   },
 };
 

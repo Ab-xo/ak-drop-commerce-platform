@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type Stripe from 'stripe';
 import { createAdminClient } from '@/lib/supabase-admin';
 import { getStripeClient } from '@/lib/stripe';
+import { sendOrderConfirmationEmail } from '@/lib/order-email';
 
 export async function POST(request: Request) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
@@ -82,6 +83,52 @@ export async function POST(request: Request) {
     if (error) {
       console.error('Stripe webhook could not update the order:', error.message);
       return NextResponse.json({ error: 'Unable to update payment status.' }, { status: 500 });
+    }
+
+    // Send order confirmation email (best-effort — don't fail webhook if email fails)
+    if (event.type === 'checkout.session.completed') {
+      try {
+        const admin = createAdminClient();
+        const { data: order } = await admin
+          .from('orders')
+          .select('id, order_number, subtotal_amount, currency, shipping_address')
+          .eq('id', orderId)
+          .maybeSingle();
+
+        const { data: items } = await admin
+          .from('order_items')
+          .select('product_name, product_sku, quantity, unit_price, size, color')
+          .eq('order_id', orderId);
+
+        const { data: profile } = await admin
+          .from('user_profiles')
+          .select('full_name, email')
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (order && items?.length && profile?.email) {
+          const addr = order.shipping_address as Record<string, string> | null;
+          await sendOrderConfirmationEmail({
+            orderNumber: order.order_number,
+            orderId: order.id,
+            customerName: profile.full_name || addr?.full_name || 'Customer',
+            customerEmail: profile.email,
+            items: items.map((i) => ({
+              product_name: i.product_name,
+              product_sku: i.product_sku,
+              quantity: i.quantity,
+              unit_price: Number(i.unit_price),
+              size: i.size,
+              color: i.color,
+            })),
+            subtotalEtb: Number(order.subtotal_amount),
+            shippingAddress: addr ?? {},
+            currency: order.currency,
+          });
+        }
+      } catch (emailError) {
+        console.error('Order confirmation email failed (non-fatal):', emailError instanceof Error ? emailError.message : emailError);
+      }
     }
   } catch (error) {
     console.error('Stripe webhook processing failed:', error);

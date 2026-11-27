@@ -219,13 +219,11 @@ export default async function AdminOrdersPage({
                   return (
                     <tr
                       key={order.id}
-                      className="group cursor-pointer transition-colors hover:bg-secondary/30"
-                      onClick={() => { window.location.href = `/admin/orders/${order.id}`; }}
+                      className="group transition-colors hover:bg-secondary/30"
                     >
                       <td className="px-5 py-4">
                         <Link
                           href={`/admin/orders/${order.id}`}
-                          onClick={(e) => e.stopPropagation()}
                           className="font-bold text-foreground hover:text-primary transition-colors"
                         >
                           #{order.order_number}
